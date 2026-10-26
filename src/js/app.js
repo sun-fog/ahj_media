@@ -94,7 +94,7 @@ function render() {
       mediaHtml += `<audio controls src="${audio}"></audio>`;
     }
     if (video) {
-      mediaHtml += `<video controls playsinline width="100%" height="auto" src="${video}"></video>`;
+      mediaHtml += `<video controls playsinline src="${video}"></video>`;
     }
 
     item.innerHTML = `
@@ -131,7 +131,6 @@ function getCoords() {
   });
 }
 
-// openModal объявлена РАНЬШЕ savePost — это было источником ошибки на строке 143
 function openModal(hint) {
   pendingText = input.value.trim() || '';
   modalHint.textContent = hint;
@@ -200,11 +199,8 @@ function startMicRecording() {
         stream.getTracks().forEach((t) => t.stop());
         if (!micActive) return; // запись отменена
         const blob = new Blob(micChunks, { type: micRecorder.mimeType });
-        const reader = new FileReader();
-        reader.addEventListener('load', () => {
-          savePost('Аудиозапись', { audio: reader.result });
-        });
-        reader.readAsDataURL(blob);
+        const url = URL.createObjectURL(blob);
+        savePost('Аудиозапись', { audio: url });
       });
       micRecorder.start();
       micActive = true;
@@ -339,11 +335,8 @@ function handleVideoRecordBtnClick() {
   videoRecorder.addEventListener('stop', () => {
     if (videoModal.hidden) return; // запись отменена
     const blob = new Blob(videoChunks, { type: videoRecorder.mimeType });
-    const reader = new FileReader();
-    reader.addEventListener('load', () => {
-      savePost('Видеозапись', { video: reader.result });
-    });
-    reader.readAsDataURL(blob);
+    const url = URL.createObjectURL(blob);
+    savePost('Видеозапись', { video: url });
     closeVideoModal();
   });
   videoRecorder.start();
