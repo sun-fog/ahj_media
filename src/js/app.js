@@ -1,19 +1,17 @@
 import parseCoordinates from './coordinates';
 
 const posts = [];
-let pendingType = null;
-let pendingValue = null;
+let pendingText = null;
 
 const postsEl = document.getElementById('posts');
 const form = document.getElementById('form');
 const input = document.getElementById('input');
-const audioBtn = document.getElementById('audio-btn');
+const micBtn = document.getElementById('mic-btn');
 const videoBtn = document.getElementById('video-btn');
-const audioCancelBtn = document.getElementById('audio-cancel');
-const audioStatus = document.getElementById('audio-status');
-const noticeEl = document.getElementById('notice');
 
-const coordsModal = document.getElementById('modal');
+const notice = document.getElementById('notice');
+
+const modal = document.getElementById('modal');
 const modalHint = document.getElementById('modal-hint');
 const modalInput = document.getElementById('modal-input');
 const modalError = document.getElementById('modal-error');
@@ -28,306 +26,332 @@ const videoCancelBtn = document.getElementById('video-cancel');
 const HINT_DEFAULT =
   'Не удалось получить координаты. Укажите их вручную в формате «широта, долгота»:';
 
-const HINTS = {
-  PERMISSION_DENIED: 'Доступ к местоположению запрещён.',
-  POSITION_UNAVAILABLE: 'Местоположение недоступно.',
-  TIMEOUT: 'Время ожидания координат истекло.',
-};
+let micRecorder = null;
+let micChunks = [];
+let micActive = false;
 
-let audioRecorder = null;
-let audioStream = null;
-let audioChunks = [];
-let audioCancelled = false;
-let audioTimerId = null;
-
-let videoRecorder = null;
 let videoStream = null;
+let videoRecorder = null;
 let videoChunks = [];
-let videoCancelled = false;
+let videoActive = false;
+
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
 
 function formatCoords({ latitude, longitude }) {
   return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
 }
 
-function geoErrorMessage(error) {
-  if (error.code === error.PERMISSION_DENIED) return HINTS.PERMISSION_DENIED;
-  if (error.code === error.POSITION_UNAVAILABLE)
-    return HINTS.POSITION_UNAVAILABLE;
-  if (error.code === error.TIMEOUT) return HINTS.TIMEOUT;
-  return 'Не удалось получить координаты.';
+function pickMime(candidates) {
+  if (!window.MediaRecorder) return '';
+  return candidates.find((m) => MediaRecorder.isTypeSupported(m)) || '';
+}
+
+function showNotice(message) {
+  notice.textContent = message;
+  notice.hidden = false;
+  setTimeout(() => {
+    notice.hidden = true;
+  }, 4000);
+}
+
+function render() {
+  postsEl.innerHTML = '';
+  // свежая запись — сверху
+  [...posts].reverse().forEach(({ text, coords, date, audio, video }) => {
+    const item = document.createElement('div');
+    item.className = 'post';
+    item.innerHTML = `
+      <div class="post__text">${escapeHtml(text)}</div>
+      ${
+        audio
+          ? `<audio controls src="${audio}"></audio>`
+          : ''
+      }
+      ${
+        video
+          ? `<video controls playsinline src="${video}"></video>`
+          : ''
+      }
+      <div class="post__meta">[${formatCoords(coords)}] ${date.toLocaleString(
+  'ru-RU'
+)}</div>
+    `;
+    postsEl.appendChild(item);
+  });
+}
+
+function addPost(text, coords, media = {}) {
+  posts.push({ text, coords, date: new Date(), ...media });
+  render();
 }
 
 function getCoords() {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Geolocation API не поддерживается'));
+      reject(new Error('Геолокация не поддерживается'));
       return;
     }
     navigator.geolocation.getCurrentPosition(
-      (position) => {
+      (position) =>
         resolve({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-        });
-      },
+        }),
       (error) => reject(error),
       { timeout: 10000 }
     );
   });
 }
 
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.addEventListener('load', () => resolve(reader.result));
-    reader.addEventListener('error', () => reject(reader.error));
-    reader.readAsDataURL(blob);
-  });
+function savePost(text, media = {}) {
+  getCoords()
+    .then((coords) => {
+      addPost(text, coords, media);
+    })
+    .catch((error) => {
+      const reason = geoErrorMessage(error);
+      openModal(`${reason} ${HINT_DEFAULT}`);
+    });
 }
 
-function showNotice(message) {
-  noticeEl.textContent = message;
-  noticeEl.hidden = false;
-  setTimeout(() => {
-    noticeEl.hidden = true;
-  }, 4000);
-}
-
-function render() {
-  postsEl.innerHTML = '';
-  [...posts].reverse().forEach((post) => {
-    const item = document.createElement('div');
-    item.className = 'post';
-    const body = document.createElement('div');
-    body.className = 'post__body';
-    if (post.type === 'text') {
-      body.textContent = post.data;
-    } else if (post.type === 'audio') {
-      const audio = document.createElement('audio');
-      audio.controls = true;
-      audio.src = post.data;
-      body.appendChild(audio);
-    } else if (post.type === 'video') {
-      const video = document.createElement('video');
-      video.controls = true;
-      video.src = post.data;
-      video.width = 320;
-      body.appendChild(video);
+function geoErrorMessage(error) {
+  if (error && error.code) {
+    if (error.code === error.PERMISSION_DENIED) {
+      return 'Доступ к местоположению запрещён.';
     }
-    const meta = document.createElement('div');
-    meta.className = 'post__meta';
-    meta.textContent = `[${formatCoords(
-      post.coords
-    )}] ${post.date.toLocaleString('ru-RU')}`;
-    item.appendChild(body);
-    item.appendChild(meta);
-    postsEl.appendChild(item);
-  });
-}
-
-function createPost(type, data, coords) {
-  posts.push({ type, data, coords, date: new Date() });
-  if (type === 'text') {
-    input.value = '';
+    if (error.code === error.POSITION_UNAVAILABLE) {
+      return 'Местоположение недоступно.';
+    }
+    if (error.code === error.TIMEOUT) {
+      return 'Время ожидания координат истекло.';
+    }
   }
-  render();
+  return 'Не удалось получить координаты.';
 }
 
-function openCoordsModal(type, value, error) {
-  pendingType = type;
-  pendingValue = value;
-  modalHint.textContent = `${geoErrorMessage(error)} ${HINT_DEFAULT}`;
+// --- модальное окно координат ---
+
+function openModal(hint) {
+  pendingText = input.value.trim() || '';
+  modalHint.textContent = hint;
   modalError.hidden = true;
   modalInput.classList.remove('invalid');
   modalInput.value = '';
-  coordsModal.hidden = false;
+  modal.hidden = false;
   modalInput.focus();
 }
 
-function savePost(type, value) {
-  getCoords()
-    .then((coords) => createPost(type, value, coords))
-    .catch((error) => openCoordsModal(type, value, error));
+function closeModal() {
+  modal.hidden = true;
+  pendingText = null;
 }
+
+// --- геолокация для текстовой записи ---
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();
   const text = input.value.trim();
   if (!text) return;
-  savePost('text', text);
+
+  if (!navigator.geolocation) {
+    openModal(HINT_DEFAULT);
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      addPost(text, {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+      input.value = '';
+    },
+    (error) => {
+      pendingText = text;
+      openModal(`${geoErrorMessage(error)} ${HINT_DEFAULT}`);
+    },
+    { timeout: 10000 }
+  );
 });
 
 modalOk.addEventListener('click', () => {
-  let coords;
   try {
-    coords = parseCoordinates(modalInput.value);
+    const coords = parseCoordinates(modalInput.value);
+    addPost(pendingText, coords);
+    input.value = '';
+    closeModal();
   } catch (e) {
     modalError.hidden = false;
     modalInput.classList.add('invalid');
     modalInput.focus();
-    return;
   }
-  coordsModal.hidden = true;
-  createPost(pendingType, pendingValue, coords);
-  pendingType = null;
-  pendingValue = null;
 });
 
-modalCancel.addEventListener('click', () => {
-  coordsModal.hidden = true;
-  pendingType = null;
-  pendingValue = null;
-});
+modalCancel.addEventListener('click', closeModal);
 
 modalInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
     modalOk.click();
   }
-  if (e.key === 'Escape') {
-    coordsModal.hidden = true;
-    pendingType = null;
-    pendingValue = null;
-  }
+  if (e.key === 'Escape') closeModal();
 });
 
-function stopAudioTimer() {
-  if (audioTimerId !== null) {
-    clearInterval(audioTimerId);
-    audioTimerId = null;
-  }
-}
+// --- аудио ---
 
-function updateAudioStatus(seconds) {
-  const mm = Math.floor(seconds / 60);
-  const ss = String(seconds % 60).padStart(2, '0');
-  audioStatus.textContent = `Запись… ${mm}:${ss}`;
-}
-
-function resetAudioUi() {
-  audioCancelBtn.hidden = true;
-  audioStatus.hidden = true;
-  audioBtn.textContent = '🎤';
-  audioBtn.classList.remove('timeline__btn--recording');
-  stopAudioTimer();
-}
-
-audioBtn.addEventListener('click', () => {
-  if (audioRecorder && audioRecorder.state === 'recording') {
-    audioRecorder.stop();
-    return;
-  }
-  if (!navigator.mediaDevices || !window.MediaRecorder) {
-    showNotice('Запись аудио не поддерживается этим браузером.');
+function startMicRecording() {
+  if (!window.MediaRecorder) {
+    showNotice('Запись аудио не поддерживается вашим браузером.');
     return;
   }
   navigator.mediaDevices
     .getUserMedia({ audio: true })
     .then((stream) => {
-      audioStream = stream;
-      audioCancelled = false;
-      audioChunks = [];
-      audioRecorder = new MediaRecorder(stream);
-      audioRecorder.addEventListener('dataavailable', (e) => {
-        audioChunks.push(e.data);
+      const mimeType = pickMime(['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']);
+      micRecorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      micChunks = [];
+      micRecorder.addEventListener('dataavailable', (e) => {
+        if (e.data.size > 0) micChunks.push(e.data);
       });
-      audioRecorder.addEventListener('stop', () => {
-        resetAudioUi();
-        audioStream.getTracks().forEach((track) => track.stop());
-        audioStream = null;
-        const mimeType = audioRecorder.mimeType || 'audio/webm';
-        audioRecorder = null;
-        if (audioCancelled) {
-          audioCancelled = false;
-          return;
-        }
-        const blob = new Blob(audioChunks, { type: mimeType });
-        blobToDataUrl(blob).then((dataUrl) => savePost('audio', dataUrl));
+      micRecorder.addEventListener('stop', () => {
+        stream.getTracks().forEach((t) => t.stop());
+        if (!micActive) return; // запись отменена — не сохраняем
+        const blob = new Blob(micChunks, { type: micRecorder.mimeType });
+        const reader = new FileReader();
+        reader.addEventListener('load', () => {
+          savePost('Аудиозапись', { audio: reader.result });
+        });
+        reader.readAsDataURL(blob);
       });
-      audioRecorder.start();
-      audioBtn.textContent = '⏹';
-      audioBtn.classList.add('timeline__btn--recording');
-      audioCancelBtn.hidden = false;
-      audioStatus.hidden = false;
-      let seconds = 0;
-      updateAudioStatus(seconds);
-      audioTimerId = setInterval(() => {
-        seconds += 1;
-        updateAudioStatus(seconds);
-      }, 1000);
+      micRecorder.start();
+      micActive = true;
+      micBtn.textContent = '⏹';
+      micBtn.classList.add('timeline__btn--recording');
+      micTimerEl.hidden = false;
+      micStart = Date.now();
+      micTimerId = setInterval(updateMicTimer, 500);
     })
-    .catch(() => {
-      showNotice('Не удалось получить доступ к микрофону.');
-    });
-});
-
-audioCancelBtn.addEventListener('click', () => {
-  audioCancelled = true;
-  if (audioRecorder && audioRecorder.state === 'recording') {
-    audioRecorder.stop();
-  }
-});
-
-function closeVideoModal() {
-  videoModal.hidden = true;
-  videoPreview.srcObject = null;
-  if (videoStream) {
-    videoStream.getTracks().forEach((track) => track.stop());
-    videoStream = null;
-  }
-  videoRecorder = null;
+    .catch(() => showNotice('Доступ к микрофону запрещён или недоступен.'));
 }
 
-videoBtn.addEventListener('click', () => {
+let micTimerId = null;
+let micStart = 0;
+const micTimerEl = document.getElementById('mic-timer');
+
+function updateMicTimer() {
+  const seconds = Math.floor((Date.now() - micStart) / 1000);
+  micTimerEl.textContent = `Запись… 0:${String(seconds).padStart(2, '0')}`;
+}
+
+function stopMicRecording(save) {
+  micActive = save;
+  if (micRecorder && micRecorder.state !== 'inactive') {
+    micRecorder.stop();
+  }
+  micBtn.textContent = '🎤';
+  micBtn.classList.remove('timeline__btn--recording');
+  clearInterval(micTimerId);
+  micTimerEl.hidden = true;
+}
+
+micBtn.addEventListener('click', () => {
+  if (micActive) {
+    stopMicRecording(true);
+  } else {
+    startMicRecording();
+  }
+});
+
+const micCancelBtn = document.getElementById('mic-cancel');
+
+micCancelBtn.addEventListener('click', () => {
+  stopMicRecording(false);
+});
+
+// --- видео ---
+
+function openVideoModal() {
   if (!navigator.mediaDevices || !window.MediaRecorder) {
-    showNotice('Запись видео не поддерживается этим браузером.');
+    showNotice('Запись видео не поддерживается вашим браузером.');
     return;
   }
   navigator.mediaDevices
     .getUserMedia({ video: true, audio: true })
     .then((stream) => {
       videoStream = stream;
-      videoCancelled = false;
-      videoChunks = [];
       videoPreview.srcObject = stream;
       videoRecordBtn.textContent = 'Записать';
+      videoRecordBtn.disabled = false;
+      videoRecordBtn.classList.remove('timeline__btn--recording');
+      videoActive = false;
       videoModal.hidden = false;
     })
-    .catch(() => {
-      showNotice('Не удалось получить доступ к камере и микрофону.');
-    });
-});
+    .catch(() => showNotice('Доступ к камере или микрофону запрещён или недоступен.'));
+}
+
+function closeVideoModal() {
+  videoModal.hidden = true;
+  videoActive = false;
+  if (videoRecorder && videoRecorder.state !== 'inactive') {
+    videoRecorder.stop();
+  }
+  if (videoStream) {
+    videoStream.getTracks().forEach((t) => t.stop());
+    videoStream = null;
+  }
+  videoPreview.srcObject = null;
+}
+
+videoBtn.addEventListener('click', openVideoModal);
 
 videoRecordBtn.addEventListener('click', () => {
-  if (videoRecorder && videoRecorder.state === 'recording') {
-    videoRecorder.stop();
+  if (videoActive) {
+    videoActive = false;
+    if (videoRecorder && videoRecorder.state !== 'inactive') {
+      videoRecorder.stop();
+    }
     return;
   }
-  videoRecorder = new MediaRecorder(videoStream);
+  const mimeType = pickMime([
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+    'video/mp4',
+  ]);
+  videoRecorder = mimeType
+    ? new MediaRecorder(videoStream, { mimeType })
+    : new MediaRecorder(videoStream);
+  videoChunks = [];
   videoRecorder.addEventListener('dataavailable', (e) => {
-    videoChunks.push(e.data);
+    if (e.data.size > 0) videoChunks.push(e.data);
   });
   videoRecorder.addEventListener('stop', () => {
-    const mimeType = videoRecorder.mimeType || 'video/webm';
-    const blob = new Blob(videoChunks, { type: mimeType });
+    if (videoModal.hidden) return; // запись отменена — окно уже закрыто
+    const blob = new Blob(videoChunks, { type: videoRecorder.mimeType });
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      savePost('Видеозапись', { video: reader.result });
+    });
+    reader.readAsDataURL(blob);
     closeVideoModal();
-    if (videoCancelled) {
-      videoCancelled = false;
-      return;
-    }
-    blobToDataUrl(blob).then((dataUrl) => savePost('video', dataUrl));
   });
   videoRecorder.start();
+  videoActive = true;
   videoRecordBtn.textContent = 'Остановить';
+  videoRecordBtn.classList.add('timeline__btn--recording');
 });
 
 videoCancelBtn.addEventListener('click', () => {
-  videoCancelled = true;
-  if (videoRecorder && videoRecorder.state === 'recording') {
+  videoActive = false;
+  if (videoRecorder && videoRecorder.state !== 'inactive') {
     videoRecorder.stop();
-  } else {
-    closeVideoModal();
   }
+  closeVideoModal();
 });
 
 export default function app() {}
