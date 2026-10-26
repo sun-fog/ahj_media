@@ -1,0 +1,172 @@
+/* Общие настройки страницы */
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f2f2f2;
+  color: #333;
+}
+
+/* Обёртка всей ленты: центрируем и ограничиваем ширину */
+.timeline {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* Список записей */
+.timeline__posts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Карточка отдельной записи */
+.post {
+  background: #fff;
+  border-radius: 8px;
+  padding: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.post__text {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* Метаинформация: координаты и дата */
+.post__meta {
+  margin-top: 8px;
+  color: #777;
+  font-size: 12px;
+}
+
+/* Форма ввода */
+.timeline__form {
+  margin-top: 16px;
+}
+
+.timeline__input,
+.modal__input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* Подсветка ошибок валидации */
+.timeline__input.invalid,
+.modal__input.invalid {
+  border-color: #e53935;
+}
+
+/* Служебный класс для скрытия элементов */
+.hidden {
+  display: none;
+}
+
+/* Модальное окно ввода координат */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal__box {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  width: 320px;
+}
+
+.modal__error {
+  color: #e53935;
+  font-size: 12px;
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.modal__actions button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+#modal-ok {
+  background: #1a73e8;
+  color: #fff;
+}
+
+#modal-cancel {
+  background: #eee;
+}
+
+.timeline__form {
+  display: flex;
+  gap: 8px;
+}
+
+.timeline__btn {
+  border: none;
+  background: none;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.timeline__btn--cancel {
+  color: #d32f2f;
+  font-size: 14px;
+}
+
+.timeline__btn--recording {
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.timeline__status {
+  color: #d32f2f;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.notice {
+  background: #fdecea;
+  color: #b71c1c;
+  border: 1px solid #f5c6cb;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+
+.post video,
+.post audio {
+  max-width: 320px;
+  width: 100%;
+}
+
+.modal__box video {
+  width: 100%;
+  max-width: 480px;
+  background: #000;
+  border-radius: 4px;
+}
+
