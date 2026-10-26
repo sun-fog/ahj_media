@@ -3,63 +3,45 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Timeline</title>
+    <title>AHJ Media</title>
   </head>
   <body>
-    <div class="timeline">
-      <div class="timeline__posts" id="posts"></div>
+    <div class="app">
+      <div id="notice" class="notice" hidden></div>
 
-      <div class="timeline__status" id="audio-status" hidden></div>
-      <button
-        type="button"
-        class="timeline__btn timeline__btn--cancel"
-        id="audio-cancel"
-        hidden
-      >
-        Cancel
-      </button>
+      <div id="posts" class="posts"></div>
 
-      <form class="timeline__form" id="form">
-        <input
-          class="timeline__input"
-          id="input"
-          placeholder="Введите текст и нажмите Enter"
-          autocomplete="off"
-        />
-        <button type="button" class="timeline__btn" id="audio-btn" title="Записать аудио">
-          🎤
-        </button>
-        <button type="button" class="timeline__btn" id="video-btn" title="Записать видео">
-          📹
-        </button>
+      <form id="form" class="timeline__form">
+        <button type="button" id="mic-btn" class="timeline__btn" title="Записать аудио">🎤</button>
+        <button type="button" id="video-btn" class="timeline__btn" title="Записать видео">📹</button>
+        <span id="mic-timer" class="mic-timer" hidden></span>
+        <button type="button" id="mic-cancel" class="timeline__btn timeline__btn--cancel" hidden>Cancel</button>
+        <input id="input" class="timeline__input" placeholder="Что нового?" autocomplete="off" />
       </form>
-
-      <div class="notice" id="notice" hidden></div>
     </div>
 
-    <div class="modal" id="modal" hidden>
+    <!-- Модальное окно ручного ввода координат -->
+    <div id="modal" class="modal" hidden>
       <div class="modal__box">
-        <p id="modal-hint">
-          Не удалось получить координаты. Укажите их вручную в формате
-          «широта, долгота»:
-        </p>
-        <input class="modal__input" id="modal-input" autocomplete="off" />
-        <p class="modal__error" id="modal-error" hidden>
-          Неверный формат. Пример: 51.50851, −0.12572
+        <p id="modal-hint" class="modal__hint"></p>
+        <input id="modal-input" class="modal__input" placeholder="51.50851, -0.12572" />
+        <p id="modal-error" class="modal__error" hidden>
+          Введите координаты в формате «широта, долгота»
         </p>
         <div class="modal__actions">
-          <button type="button" id="modal-cancel">Отмена</button>
-          <button type="button" id="modal-ok">ОК</button>
+          <button id="modal-ok" type="button" class="modal__btn">Сохранить</button>
+          <button id="modal-cancel" type="button" class="modal__btn">Отмена</button>
         </div>
       </div>
     </div>
 
-    <div class="modal" id="video-modal" hidden>
+    <!-- Модальное окно записи видео -->
+    <div id="video-modal" class="modal" hidden>
       <div class="modal__box">
-        <video id="video-preview" autoplay muted playsinline></video>
+        <video id="video-preview" class="modal__preview" muted autoplay playsinline></video>
         <div class="modal__actions">
-          <button type="button" id="video-cancel">Отмена</button>
-          <button type="button" id="video-record">Записать</button>
+          <button id="video-record" type="button" class="modal__btn">Записать</button>
+          <button id="video-cancel" type="button" class="modal__btn">Отмена</button>
         </div>
       </div>
     </div>
