@@ -1,5 +1,6 @@
 # AHJ Media — Timeline с текстом, аудио и видео
 
+
 ![CI](https://github.com/sun-fog/ahj_media/actions/workflows/deploy.yml/badge.svg)
 
 [Запустить приложение](https://sun-fog.github.io/ahj_media/ "Откроется страница приложения на GitHub Pages")
