@@ -45,12 +45,6 @@ const HINT_DEFAULT =
 // ВСЕ ФУНКЦИИ — ПЕРВЫМИ (каждая вызывает только то, что выше)
 // ============================================================
 
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
 function formatCoords({ latitude, longitude }) {
   return `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
 }
@@ -89,21 +83,54 @@ function render() {
     const item = document.createElement('div');
     item.className = 'post';
 
-    let mediaHtml = '';
+    const textEl = document.createElement('div');
+    textEl.className = 'post__text';
+    textEl.textContent = text;
+    item.appendChild(textEl);
+
     if (audio) {
-      mediaHtml += `<audio controls src="${audio}"></audio>`;
-    }
-    if (video) {
-      mediaHtml += `<video controls playsinline src="${video}"></video>`;
+      const audioEl = document.createElement('audio');
+      audioEl.controls = true;
+      audioEl.src = audio;
+      item.appendChild(audioEl);
     }
 
-    item.innerHTML = `
-      <div class="post__text">${escapeHtml(text)}</div>
-      ${mediaHtml}
-      <div class="post__meta">[${formatCoords(coords)}] ${date.toLocaleString(
+    if (video) {
+      const videoEl = document.createElement('video');
+      videoEl.controls = true;
+      videoEl.playsInline = true;
+      videoEl.src = video;
+      videoEl.addEventListener('error', () => {
+        const codes = {
+          1: 'загрузка прервана',
+          2: 'ошибка сети',
+          3: 'ошибка декодирования (кодек)',
+          4: 'формат не поддерживается',
+        };
+        showNotice(
+          `Видео: ${
+            codes[videoEl.error ? videoEl.error.code : 0] ||
+            'неизвестная ошибка'
+          }`
+        );
+      });
+      videoEl.addEventListener('loadedmetadata', () => {
+        showNotice(
+          `Видео готово: ${videoEl.videoWidth}×${
+            videoEl.videoHeight
+          }, ${videoEl.duration.toFixed(1)} с`
+        );
+      });
+      item.appendChild(videoEl);
+    }
+
+    const meta = document.createElement('div');
+    meta.className = 'post__meta';
+    meta.textContent = `[${formatCoords(coords)}] ${date.toLocaleString(
       'ru-RU'
-    )}</div>
-    `;
+    )}`;
+    item.appendChild(meta);
+
     postsEl.appendChild(item);
   });
 }
